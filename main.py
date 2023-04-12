@@ -1,15 +1,18 @@
 import datetime
 import os
 import random
+import threading
 import time
+import uuid
 
+import librosa as librosa
 import pandas as pd
+import pyaudio
 import requests
 import speech_recognition as sr
 import pyautogui
 import matplotlib.pyplot as plt
 import numpy as np
-import librosa
 import openai
 from google.cloud import texttospeech
 import IPython.display as ipd
@@ -24,17 +27,16 @@ from tqdm.auto import tqdm
 from google.cloud import texttospeech
 
 credentials = service_account.Credentials.from_service_account_file('hcin-382111-2b36cc7a166f.json')
-openai.api_key = "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"
-
+openai.api_key = "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"
 model = Sequential()
 labelencoder = LabelEncoder()
-
-
+p = pyaudio.PyAudio()
 # Initialize the recognizer
 
-def get_weather(location):
+def get_weather(location, name):
     #Mieders, PLZ 6142
-    prompt = f"Du bist ein Sprecher für eine Wettervorhersagung. Für deine Vorhersagungen benutzt du https://at.wetter.com/. Schreibe kurze, formale und prezise Antworten. Wie ist das Wetter heute in {location}? Benutze dazu das Internet. Bitte nur die Information wiedergeben."
+    responsee = None
+    prompt = f"Du bist ein Sprecher für eine Wettervorhersagung. Für deine Vorhersagungen benutzt du https://at.wetter.com/. Schreibe kurze, formale und prezise Antworten. Wie ist das Wetter heute in {location}? Benutze dazu das Internet. Nenne mich {name}. Bitte nur die Information wiedergeben."
     response = openai.Completion.create(
         engine="text-davinci-002",
         prompt=prompt,
@@ -47,22 +49,29 @@ def get_weather(location):
 
 
 
+
 # Define the function to start the app
 def start_app(app_name):
-    if app_name == "notepad":
+
         pyautogui.press('win')
-        pyautogui.typewrite('notepad')
+        pyautogui.typewrite(app_name)
         pyautogui.press('enter')
-    elif app_name == "calculator":
-        pyautogui.press('win')
-        pyautogui.typewrite('calculator')
-        pyautogui.press('enter')
-    # Add other apps and their commands as needed
 
 # Define the function to record and identify spoken audio
-def listen_and_start(i):
+def listen_and_start():
     r = sr.Recognizer()
-    with sr.Microphone() as source:
+    info = p.get_host_api_info_by_index(0)
+    numdevices = info.get('deviceCount')
+
+    print("Available microphone sources:")
+
+    for i in range(0, numdevices):
+        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+            print(f"  [{'{:02d}'.format(i+1)}] ", p.get_device_info_by_host_api_device_index(0, i).get('name'))
+    output = None
+    num = int(input("Select a microphone source: "))
+    print(f"Selected microphone source: {p.get_device_info_by_host_api_device_index(0, num-1).get('name')}")
+    with sr.Microphone(device_index=p.get_device_info_by_host_api_device_index(0, num-1).get('index')) as source:
         r.adjust_for_ambient_noise(source, duration=0.2)
         print("Listening...")
         audio = r.listen(source)
@@ -73,24 +82,47 @@ def listen_and_start(i):
             print(f"You said ({str(i)}): " + recognized_text)
 
             # Start the app based on the recognized text
-            if "open notepad" in recognized_text.lower():
-                start_app("notepad")
-            elif "open calculator" in recognized_text.lower():
-                start_app("calculator")
+            if recognized_text.lower().startswith("öffne"):
+                start_app(recognized_text.lower().split(" ")[1])
+                return
+            elif "noa" in recognized_text.lower() and "wetter" in recognized_text.lower():
+                output = get_weather(getUserByName("Noah"), "Noah")
+            elif "timo" in recognized_text.lower() and "wetter" in recognized_text.lower():
+                output = get_weather(getUserByName("Timo"), "Timo")
+            else:
+                output = "Ich habe dich nicht verstanden."
             # Add other app commands as needed
         except sr.UnknownValueError:
             print("Could not understand audio")
         except sr.RequestError as e:
             print("Could not request results; {0}".format(e))
+        uu = uuid.uuid4()
+        synthesize_text_with_audio_profile(output, "temp/" + str(uu) + ".mp3", "medium-bluetooth-speaker-class-device", "de-DE-Neural2-B")
+        time.sleep(1)
+        for i in tqdm(range(100), desc="Loading", ncols=100, unit_scale=False):
+            time.sleep(0.01)
+        print("Chatbot: " + output)
+        playsound(str(uu) + ".mp3")
 
-        makefolder('noah')
-        with open(f"noah/wetter{str(i)}.wav", "wb") as f:
-            f.write(audio.get_wav_data())
+
+def playsound(filename):
+    from playsound import playsound
+
+    # Set the file name and path
+    filepath = os.path.join(os.getcwd(),"temp",filename)
+    # Load the audio file using Pydub
+
+    playsound(filepath)
+
+#makefolder('noah')
+        #with open(f"noah/wetter{str(i)}.wav", "wb") as f:
+            #f.write(audio.get_wav_data())
 def feature_extraction(file_name):
     x, sample_rate = librosa.load(file_name, res_type='kaiser_fast')
     #plot(x, "Audio", "Time", "Amplitude")
     mfccs = np.mean(librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40).T, axis=0)
     return mfccs
+
 
 def plot(vector, name, xlabel=None, ylabel=None):
     plt.figure()
@@ -103,7 +135,7 @@ def plot(vector, name, xlabel=None, ylabel=None):
 def addUser(name, loc, plz):
     param = {"name": name, "location": loc, "plz": plz}
 
-    print(requests.post("http://localhost:5000/users", json=param))
+    print(requests.post("http://localhost:5000/users", json=param).json()['message'])
 
 def getUsers():
     ret = requests.get("http://localhost:5000/users").json()
@@ -170,7 +202,10 @@ def main():
 
         time.sleep(0.1)
         if i != 0:
-            weather.append(get_weather(item))
+            if i == 1:
+                weather.append(get_weather(item, "Noah"))
+            elif i == 2:
+                weather.append(get_weather(item, "Timo"))
     for i in tqdm(range(100), desc="Loading", ncols=100, unit_scale=False):
         time.sleep(0.05)
     for w in weather:
@@ -243,6 +278,7 @@ def classification():
 
 def predict(filename):
     # Testing some Test Audio Files
+    pass
     audio, sample_rate = librosa.load(filename, res_type='kaiser_fast')
     mfccs = np.mean(librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=40).T, axis=0)
     mfccs = mfccs.reshape(1, -1)
@@ -254,7 +290,14 @@ def predict(filename):
 
 # Call the function to start listening
 if __name__ == '__main__':
-    classification()
+
+
+    listen_and_start()
+    #main()
+    #classification()
+    #feature_extraction("temp/wetter5000.wav")
+    #addUser("Noah", "Mieders", 6142)
+    #print(get_weather(getUserByName("Noah"), "Noah"))
     #predict("temp/wetter5000.wav")
     #predict("temp/wetter500.wav")
 
