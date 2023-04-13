@@ -54,7 +54,9 @@ def get_weather(location, name):
 def start_app(app_name):
 
         pyautogui.press('win')
+        time.sleep(1)
         pyautogui.typewrite(app_name)
+        time.sleep(1)
         pyautogui.press('enter')
 
 # Define the function to record and identify spoken audio
@@ -77,11 +79,9 @@ def listen_and_start():
         audio = r.listen(source)
 
         try:
-            # Use Google Speech Recognition to convert speech to text
             recognized_text = r.recognize_google(audio, language="de-DE")
             print(f"You said ({str(i)}): " + recognized_text)
 
-            # Start the app based on the recognized text
             if recognized_text.lower().startswith("öffne"):
                 start_app(recognized_text.lower().split(" ")[1])
                 return
@@ -91,7 +91,6 @@ def listen_and_start():
                 output = get_weather(getUserByName("Timo"), "Timo")
             else:
                 output = "Ich habe dich nicht verstanden."
-            # Add other app commands as needed
         except sr.UnknownValueError:
             print("Could not understand audio")
         except sr.RequestError as e:
@@ -108,15 +107,10 @@ def listen_and_start():
 def playsound(filename):
     from playsound import playsound
 
-    # Set the file name and path
     filepath = os.path.join(os.getcwd(),"temp",filename)
-    # Load the audio file using Pydub
 
     playsound(filepath)
 
-#makefolder('noah')
-        #with open(f"noah/wetter{str(i)}.wav", "wb") as f:
-            #f.write(audio.get_wav_data())
 def feature_extraction(file_name):
     x, sample_rate = librosa.load(file_name, res_type='kaiser_fast')
     #plot(x, "Audio", "Time", "Amplitude")
@@ -154,19 +148,14 @@ def getUserByName(name):
 
 
 def synthesize_text_with_audio_profile(text, output, effects_profile_id, voicee):
-    """Synthesizes speech from the input string of text."""
 
 
     client = texttospeech.TextToSpeechClient(credentials=credentials)
 
     input_text = texttospeech.SynthesisInput(text=text)
 
-    # Note: the voice can also be specified by name.
-    # Names of voices can be retrieved with client.list_voices().
     voice = texttospeech.VoiceSelectionParams(language_code="de-DE" , name=voicee)
 
-    # Note: you can pass in multiple effects_profile_id. They will be applied
-    # in the same order they are provided.
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
         effects_profile_id=[effects_profile_id],
@@ -176,11 +165,10 @@ def synthesize_text_with_audio_profile(text, output, effects_profile_id, voicee)
         input=input_text, voice=voice, audio_config=audio_config
     )
 
-    # The response's audio_content is binary.
     with open(output, "wb") as out:
 
         out.write(response.audio_content)
-        print('Audio content written to file "%s"' % output)
+        print('Audiodaten wurden in File gespeichert: "%s"' % output)
 
 
 def makefolder(name):
